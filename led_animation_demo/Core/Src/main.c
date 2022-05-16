@@ -1,62 +1,141 @@
-/* USER CODE BEGIN Header */
 /**
   ******************************************************************************
   * @file           : main.c
   * @brief          : Main program body
   ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2022 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
-/* USER CODE END Header */
+*/
+
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 
 /* Private includes ----------------------------------------------------------*/
-/* USER CODE BEGIN Includes */
-
-/* USER CODE END Includes */
-
 /* Private typedef -----------------------------------------------------------*/
-/* USER CODE BEGIN PTD */
-
-/* USER CODE END PTD */
-
 /* Private define ------------------------------------------------------------*/
-/* USER CODE BEGIN PD */
-/* USER CODE END PD */
-
 /* Private macro -------------------------------------------------------------*/
-/* USER CODE BEGIN PM */
-
-/* USER CODE END PM */
-
 /* Private variables ---------------------------------------------------------*/
- UART_HandleTypeDef huart2;
 
-/* USER CODE BEGIN PV */
-
-/* USER CODE END PV */
+UART_HandleTypeDef huart2;
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
-/* USER CODE BEGIN PFP */
 
-/* USER CODE END PFP */
+#define MAX_NUMBER_LEDs (5)    // Max number of LEDs to use 
+#define PB_DEBOUNCE_MS  (200)  // debounce period for push button
 
-/* Private user code ---------------------------------------------------------*/
-/* USER CODE BEGIN 0 */
+/**
+ * @brief List of all possible led speeds 
+ * 
+ */
+typedef enum
+{
+  E_LED_ANIM_SPEED_OFF = 0, // 0Hz   
+  E_LED_ANIM_SPEED_LOW,     // 1Hz   speed
+  E_LED_ANIM_SPEED_MEDIUM,  // 10Hz  speed
+  E_LED_ANIM_SPEED_HIGH,    // 100Hz speed
+  E_LED_ANIMn,          
+}led_anim_speed_t;
 
-/* USER CODE END 0 */
+/**
+ * @brief Struct to encapsilate LEDs Port, Pin
+ * 
+ */
+typedef struct 
+{
+  uint16_t     pin;
+  GPIO_TypeDef *port;
+}led_gpio_port_pin_t;
+
+
+/*global instance of LED to use*/
+led_gpio_port_pin_t led_gpio[MAX_NUMBER_LEDs] =
+{
+  {.port = LED_1_GPIO_Port, .pin = LED_1_Pin},
+  {.port = LED_2_GPIO_Port, .pin = LED_2_Pin},
+  {.port = LED_3_GPIO_Port, .pin = LED_3_Pin},
+  {.port = LED_4_GPIO_Port, .pin = LED_4_Pin},
+  {.port = LED_5_GPIO_Port, .pin = LED_5_Pin}
+};
+
+/**
+ * @brief Return next animation
+ */
+led_anim_speed_t led_animation_next(led_anim_speed_t speed)
+{
+  // return sequence 0,1,2,3,0,1,2,3
+  speed = ((speed + 1)% E_LED_ANIMn);
+  return speed;
+}
+
+/**
+ * @brief Return LED animation period in ms 
+ */
+uint32_t led_animation_get_period_ms(led_anim_speed_t speed)
+{
+  switch (speed)
+  {
+  case E_LED_ANIM_SPEED_OFF:      return 0       ; break;
+  case E_LED_ANIM_SPEED_LOW :     return 1000    ; break;
+  case E_LED_ANIM_SPEED_MEDIUM :  return 1000/4  ; break;
+  case E_LED_ANIM_SPEED_HIGH :    return 1000/8  ; break;
+  default:
+    break;
+  }
+}
+
+
+/**
+ * @brief Execute blink no blocking mode in ALL LEDs
+ * @note HAL_GetTick is a HAL function that increases every ms
+ * @param speed 
+ */
+void led_animation_blink(led_anim_speed_t speed)
+{
+  if (led_animation_get_period_ms(speed) > 0)
+  {
+    static uint32_t tick_ms_cnt = 0;
+
+    //wait for the period ms to expire 
+    if (HAL_GetTick() - tick_ms_cnt > led_animation_get_period_ms(speed)) 
+    {
+      for (size_t i = 0; i < MAX_NUMBER_LEDs; i++)
+        HAL_GPIO_TogglePin(led_gpio[i].port, led_gpio[i].pin);
+
+      tick_ms_cnt = HAL_GetTick();  //reload tick ms counter 
+    }
+  }
+  else
+  {
+    /*turn off all LEDs*/
+    for (size_t i = 0; i < MAX_NUMBER_LEDs; i++)
+      HAL_GPIO_WritePin(led_gpio[i].port, led_gpio[i].pin, GPIO_PIN_RESET);
+  }
+}
+
+/**
+ * @brief Return 1 if button is pressed for more than 200ms to prevent bouncing
+ * 
+ * @return uint8_t 
+ */
+uint8_t is_push_button_pressed(void)
+{
+  static uint32_t tick_ms_cnt = 0;
+	GPIO_PinState button_st = HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin);
+
+	if (button_st == GPIO_PIN_RESET)
+	{
+		if (HAL_GetTick() - tick_ms_cnt >= PB_DEBOUNCE_MS)
+		{
+			tick_ms_cnt = HAL_GetTick();
+			return 1;
+		}
+	}
+	else
+		tick_ms_cnt = HAL_GetTick();
+
+	return 0;
+}
 
 /**
   * @brief  The application entry point.
@@ -64,42 +143,27 @@ static void MX_USART2_UART_Init(void);
   */
 int main(void)
 {
-  /* USER CODE BEGIN 1 */
-
-  /* USER CODE END 1 */
-
   /* MCU Configuration--------------------------------------------------------*/
-
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
-
-  /* USER CODE BEGIN Init */
-
-  /* USER CODE END Init */
 
   /* Configure the system clock */
   SystemClock_Config();
 
-  /* USER CODE BEGIN SysInit */
-
-  /* USER CODE END SysInit */
-
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USART2_UART_Init();
-  /* USER CODE BEGIN 2 */
 
-  /* USER CODE END 2 */
+  led_anim_speed_t speed = E_LED_ANIM_SPEED_OFF;
 
   /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
   while (1)
   {
-    /* USER CODE END WHILE */
+    if (is_push_button_pressed())
+    	speed = led_animation_next(speed);
 
-    /* USER CODE BEGIN 3 */
+    led_animation_blink(speed);
   }
-  /* USER CODE END 3 */
 }
 
 /**
@@ -155,14 +219,6 @@ void SystemClock_Config(void)
   */
 static void MX_USART2_UART_Init(void)
 {
-
-  /* USER CODE BEGIN USART2_Init 0 */
-
-  /* USER CODE END USART2_Init 0 */
-
-  /* USER CODE BEGIN USART2_Init 1 */
-
-  /* USER CODE END USART2_Init 1 */
   huart2.Instance = USART2;
   huart2.Init.BaudRate = 115200;
   huart2.Init.WordLength = UART_WORDLENGTH_8B;
@@ -175,10 +231,6 @@ static void MX_USART2_UART_Init(void)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN USART2_Init 2 */
-
-  /* USER CODE END USART2_Init 2 */
-
 }
 
 /**
@@ -217,9 +269,7 @@ static void MX_GPIO_Init(void)
 
 }
 
-/* USER CODE BEGIN 4 */
 
-/* USER CODE END 4 */
 
 /**
   * @brief  This function is executed in case of error occurrence.
@@ -227,13 +277,11 @@ static void MX_GPIO_Init(void)
   */
 void Error_Handler(void)
 {
-  /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
   while (1)
   {
   }
-  /* USER CODE END Error_Handler_Debug */
 }
 
 #ifdef  USE_FULL_ASSERT
@@ -246,9 +294,7 @@ void Error_Handler(void)
   */
 void assert_failed(uint8_t *file, uint32_t line)
 {
-  /* USER CODE BEGIN 6 */
   /* User can add his own implementation to report the file name and line number,
      ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
-  /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */

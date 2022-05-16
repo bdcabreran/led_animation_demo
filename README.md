@@ -9,7 +9,7 @@ Create an LED animation using x6 GPIOs from a ST development kit, this is a basi
 STMCube IDE GPIO initialization and usage, the exercise includes use of ST HAL libraries 
 
 ## Platform : 
-Board STM32 Nucleo - STM32F4 will be used.
+Board STM32 NUCLEO-F401RE will be used.
 
 ## Functionality 
 Six GPIOs will be used to generate a blink sequence with three different speeds :
